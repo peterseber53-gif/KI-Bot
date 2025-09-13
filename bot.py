@@ -9,7 +9,14 @@ from google.oauth2.service_account import Credentials
 import datetime
 
 # Lade Umgebungsvariablen
-load_dotenv()
+load_dotenv()# --- BEGIN: write Google service account json from env if provided ---
+import os
+gsa = os.getenv("GOOGLE_SERVICE_ACCOUNT")
+if gsa:
+    with open("service_account.json", "w", encoding="utf-8") as f:
+        f.write(gsa)
+# --- END ---
+
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
@@ -67,3 +74,4 @@ def sms_reply():
 
 if __name__ == "__main__":
     app.run(port=5000)
+
