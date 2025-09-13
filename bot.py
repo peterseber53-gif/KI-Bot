@@ -1,0 +1,69 @@
+from flask import Flask, request
+from twilio.twiml.messaging_response import MessagingResponse
+from twilio.rest import Client
+import openai
+import os
+from dotenv import load_dotenv
+from googleapiclient.discovery import build
+from google.oauth2.service_account import Credentials
+import datetime
+
+# Lade Umgebungsvariablen
+load_dotenv()
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
+
+# Twilio Client
+twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+# OpenAI Key
+openai.api_key = OPENAI_API_KEY
+
+# Flask App
+app = Flask(__name__)
+
+# Google Calendar Setup
+SCOPES = ['https://www.googleapis.com/auth/calendar']
+SERVICE_ACCOUNT_FILE = 'service_account.json'  # muss im selben Ordner liegen
+
+credentials = Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+service = build('calendar', 'v3', credentials=credentials)
+
+# Hilfsfunktion: Termin in Kalender eintragen
+def add_event_to_calendar(summary, start_time, duration_minutes):
+    start = start_time.isoformat()
+    end = (start_time + datetime.timedelta(minutes=duration_minutes)).isoformat()
+    event = {
+        'summary': summary,
+        'start': {'dateTime': start, 'timeZone': 'Europe/Berlin'},
+        'end': {'dateTime': end, 'timeZone': 'Europe/Berlin'},
+    }
+    event = service.events().insert(calendarId=GOOGLE_CALENDAR_ID, body=event).execute()
+    return event.get('id')
+
+# Flask Route für SMS
+@app.route("/sms", methods=['POST'])
+def sms_reply():
+    incoming_msg = request.form.get('Body')
+    from_number = request.form.get('From')
+    resp = MessagingResponse()
+
+    # OpenAI Anfrage
+    prompt = f"Du bist ein freundlicher Rezeptionist. Kunde schreibt: {incoming_msg}. Antworte kurz und frage nach Name, Datum, Uhrzeit, Dauer."
+    response = openai.Completion.create(
+        engine="text-davinci-003",
+        prompt=prompt,
+        max_tokens=150
+    )
+    answer = response.choices[0].text.strip()
+
+    # Sende Antwort zurück
+    resp.message(answer)
+    return str(resp)
+
+if __name__ == "__main__":
+    app.run(port=5000)
