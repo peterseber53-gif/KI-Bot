@@ -34,10 +34,10 @@ app = Flask(__name__)
 
 # Google Calendar Setup
 SCOPES = ['https://www.googleapis.com/auth/calendar']
-SERVICE_ACCOUNT_FILE = 'service_account.json'  # muss im selben Ordner liegen
+import json
+service_account_info = json.loads(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON"))
+credentials = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
 
-credentials = Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 service = build('calendar', 'v3', credentials=credentials)
 
 # Hilfsfunktion: Termin in Kalender eintragen
@@ -74,4 +74,5 @@ def sms_reply():
 
 if __name__ == "__main__":
     app.run(port=5000)
+
 
