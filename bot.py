@@ -73,6 +73,7 @@ def sms_reply():
     return str(resp)
 
 if __name__ == "__main__":
-    app.run(port=5000)
-
-
+    app.run(if __name__ == "__main__":
+    import os
+    port = int(os.environ.get("PORT", 5000))  # Render gibt den Port vor
+    app.run(host="0.0.0.0", port=port)
