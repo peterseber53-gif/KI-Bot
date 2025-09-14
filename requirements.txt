@@ -2,3 +2,4 @@ flask
 openai
 twilio
 python-dotenv
+google-api-python-client
