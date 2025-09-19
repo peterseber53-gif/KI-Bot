@@ -1,69 +1,69 @@
-from flask import Flask, request, jsonify
-from twilio.twiml.voice_response import VoiceResponse
-from twilio.rest import Client
 import os
-import openai
-from google.oauth2.service_account import Credentials
+import json
+from flask import Flask, request, jsonify
+from twilio.twiml.voice_response import VoiceResponse, Say
+from twilio.twiml.messaging_response import MessagingResponse
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
-import datetime
+import openai
 
 app = Flask(__name__)
 
-# ===== Environment Variables =====
-openai.api_key = os.environ.get("OPENAI_API_KEY")
+# OpenAI API
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-TWILIO_PHONE_NUMBER = os.environ.get("TWILIO_PHONE_NUMBER")
+# Google Calendar Setup
+creds_json = os.getenv("GOOGLE_CREDS_JSON")
+creds_dict = json.loads(creds_json)
+credentials = service_account.Credentials.from_service_account_info(
+    creds_dict,
+    scopes=["https://www.googleapis.com/auth/calendar"]
+)
+calendar_service = build("calendar", "v3", credentials=credentials)
+calendar_id = "primary"  # Hauptkalender
 
-client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+# Funktion: Termin erstellen
+def create_event(summary, start_time, end_time):
+    event = {
+        "summary": summary,
+        "start": {"dateTime": start_time, "timeZone": "Europe/Berlin"},
+        "end": {"dateTime": end_time, "timeZone": "Europe/Berlin"},
+    }
+    calendar_service.events().insert(calendarId=calendar_id, body=event).execute()
+    return f"Termin '{summary}' wurde erstellt."
 
-GOOGLE_CREDS_JSON = os.environ.get("GOOGLE_CREDS_JSON")
-credentials = Credentials.from_service_account_info(eval(GOOGLE_CREDS_JSON))
-calendar_service = build('calendar', 'v3', credentials=credentials)
-
-# ===== OpenAI Chat Logic =====
-def get_ai_response(user_message):
+# Funktion: OpenAI antwort
+def get_openai_response(message):
     response = openai.ChatCompletion.create(
         model="gpt-4",
-        messages=[{"role": "user", "content": user_message}],
-        temperature=0.7
+        messages=[{"role": "user", "content": message}]
     )
-    return response['choices'][0]['message']['content']
+    return response.choices[0].message.content
 
-# ===== Flask Routes =====
+# REST Endpoint: Chat
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.get_json()
-    user_message = data.get("message", "")
-    reply = get_ai_response(user_message)
+    data = request.json
+    message = data.get("message", "")
+    reply = get_openai_response(message)
     return jsonify({"reply": reply})
 
+# Twilio SMS Webhook
 @app.route("/sms", methods=["POST"])
 def sms_reply():
-    incoming_msg = request.form.get('Body')
-    response_msg = get_ai_response(incoming_msg)
-    resp = VoiceResponse()
-    resp.say(response_msg)
+    incoming_msg = request.values.get("Body", "")
+    reply_text = get_openai_response(incoming_msg)
+    resp = MessagingResponse()
+    resp.message(reply_text)
     return str(resp)
 
+# Twilio Voice Webhook
 @app.route("/voice", methods=["POST"])
 def voice_reply():
     resp = VoiceResponse()
-    resp.say("Hallo! Bitte sag mir, für welchen Zweck du einen Termin möchtest.")
-    resp.pause(length=1)
-    # Hier könntest du später Speech-to-Text einbauen
+    resp.say("Hallo! Wie kann ich Ihnen helfen? Bitte nennen Sie mir den Termin.", voice="alice", language="de-DE")
     return str(resp)
 
-# ===== Google Calendar Helper =====
-def create_calendar_event(summary, start_time, end_time):
-    event = {
-        'summary': summary,
-        'start': {'dateTime': start_time.isoformat(), 'timeZone': 'Europe/Berlin'},
-        'end': {'dateTime': end_time.isoformat(), 'timeZone': 'Europe/Berlin'},
-    }
-    event = calendar_service.events().insert(calendarId='primary', body=event).execute()
-    return event.get('htmlLink')
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
