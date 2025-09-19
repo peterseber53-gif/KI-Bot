@@ -3,3 +3,4 @@ openai
 twilio
 google-api-python-client
 python-dotenv
+dateparser
