@@ -7,6 +7,7 @@ from twilio.twiml.voice_response import VoiceResponse
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import dateparser
+from datetime import timedelta
 
 # Flask App starten
 app = Flask(__name__)
@@ -71,15 +72,35 @@ def sms_reply():
 def voice_reply():
     incoming_msg = request.form.get("SpeechResult", "")
     if not incoming_msg:
-        incoming_msg = "Hallo, ich möchte einen Termin vereinbaren."
+        # Erste Begrüßung, wenn noch nichts gesagt wurde
+        vr = VoiceResponse()
+        gather = vr.gather(
+            input="speech",
+            action="/voice",
+            method="POST",
+            language="de-DE",
+            timeout=5
+        )
+        gather.say("Willkommen beim KI-Assistenten. Bitte sagen Sie mir, welchen Termin Sie buchen möchten.", voice="alice", language="de-DE")
+        return str(vr)
 
+    # Wenn der Nutzer schon etwas gesagt hat
     reply = get_openai_response(incoming_msg)
 
     vr = VoiceResponse()
     vr.say(reply, voice="alice", language="de-DE")
-    vr.listen()  # erlaubt weitere Eingabe
-    return str(vr)
 
+    # Erneut zuhören, damit das Gespräch weitergeht
+    gather = vr.gather(
+        input="speech",
+        action="/voice",
+        method="POST",
+        language="de-DE",
+        timeout=5
+    )
+    gather.say("Möchten Sie noch weitere Details hinzufügen?", voice="alice", language="de-DE")
+
+    return str(vr)
 
 # 🧪 Test-Endpoint (für curl)
 @app.route("/chat", methods=["POST"])
@@ -94,3 +115,4 @@ def chat():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
